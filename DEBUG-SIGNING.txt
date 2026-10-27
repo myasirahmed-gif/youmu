@@ -1,0 +1,19 @@
+YouMu Android debug build
+
+Package name: com.youmu.app
+Version: 0.3.1 (4)
+Minimum Android: 8.0 (API 26)
+
+Signing certificate SHA-1:
+46:FE:CF:72:71:EE:2E:92:11:94:33:24:64:2E:8A:77:5F:64:5C:E6
+
+Signing certificate SHA-256:
+95:C6:82:99:80:45:DF:F6:CE:FD:4B:71:69:8A:5C:4C:5E:83:3C:8E:BF:72:6D:35:C7:D6:ED:C1:AF:EA:08:1D
+
+Register an Android OAuth client in your Google Cloud project using the
+package name and SHA-1 above. Enable YouTube Data API v3, configure the
+consent screen, request youtube.readonly, and add your test account.
+
+This fingerprint belongs to the current debug signing certificate.
+A release/Play Store build will need its own registered signing fingerprint.
+The certificate fingerprints are public identifiers, not secrets.

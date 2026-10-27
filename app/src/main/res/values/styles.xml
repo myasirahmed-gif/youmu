@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.YouMu" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#D5F18B</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:statusBarColor">#0C1015</item>
+        <item name="android:navigationBarColor">#0C1015</item>
+        <item name="android:windowBackground">#0C1015</item>
+    </style>
+</resources>
