@@ -21,7 +21,7 @@ data class PlaybackFailure(val message:String,val diagnostics:String){
                 else->"Couldn’t load ${if(phase=="playlist")"this playlist" else "this track"}. Tap Retry, or copy diagnostics from Player options."
             }
             // No request URLs, cookies, tokens or exception messages are included.
-            val detail="YouMu 0.3.1 | Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}) | phase=$phase | errors=${names.joinToString(" -> ")}"
+            val detail="YouMu 0.4.0 | Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}) | phase=$phase | errors=${names.joinToString(" -> ")}"
             return PlaybackFailure(message,detail)
         }
     }

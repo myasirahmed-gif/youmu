@@ -6,15 +6,18 @@ android {
         applicationId = "com.youmu.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.3.1"
+        versionCode = 5
+        versionName = "0.4.0"
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17; isCoreLibraryDesugaringEnabled = true }
     packaging { resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/INDEX.LIST") }
     testOptions {
         unitTests.isIncludeAndroidResources = true
-        unitTests.all { it.systemProperty("youmu.live", project.findProperty("liveAudio") ?: "false") }
+        unitTests.all {
+            it.systemProperty("youmu.live", project.findProperty("liveAudio") ?: "false")
+            it.systemProperty("youmu.preview", project.findProperty("previewUi") ?: "false")
+        }
     }
 }
 dependencies {

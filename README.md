@@ -1,14 +1,25 @@
-# YouMu for Android 0.3.1
+# YouMu for Android 0.4.0
 
 Native Kotlin music player for Android 8.0+ (API 26). Package: `com.youmu.app`.
 
-### 0.3.1 loading fix
+### 0.4.0 player and library update
+
+- Three saved themes: Midnight/Sage, Ocean/Ice blue and AMOLED/Lavender. Select Settings -> Theme.
+- Redesigned Now Playing with a display picker, a dedicated tools row, queue and timeline. Tap the artwork or use Settings -> Artwork & audio visualizations.
+- Two real audio visualizations: Spectrum (FFT frequency bars) and Orbit Wave (PCM waveform). Media3's tee audio processor passes decoded samples through unchanged. No microphone permission is used. FFT updates and visualization drawing stop when the UI is hidden; music continues.
+- Normal, Shuffle, Repeat all and Repeat one use native Media3 modes, persist between sessions and remain available while the screen is locked.
+- Download the current song to public `Music/YouMu`. Android's DownloadManager continues transfers after the UI closes. Downloads shows progress/status, retry and deletion; completed downloads play offline and are preferred when playing any playlist. Android 8–9 requests storage access only when Download is tapped. Files retain their source format, such as M4A or WebM; no MP3 conversion is claimed.
+- Create, rename and delete local playlists, add the current song, inspect songs and remove entries. Local playlist membership stays separate from the original YouTube playlist. Membership alone does not download a song.
+
+The existing library format is preserved; updating retains imported playlists, favorites and recent plays. Install over the previous APK using the same signing certificate.
+
+### Loading reliability
 
 Playback starts from the first available playlist page while later pages load in the background. Service connection, playlist startup and audio preparation have bounded waits. Failures survive service destruction and show an explicit Retry control. Player options -> Copy diagnostics provides Android version, phase and exception class names without request URLs, cookies or tokens. Regression tests cover SDK 26 (Android 8) and SDK 35; the reported phone itself was not connected, so its precise underlying failure has not been reproduced.
 
 ## Playback
 
-- Artwork-only Now Playing screen with title, channel, seek bar, queue and native playback controls. No YouTube iframe or WebView is created.
+- Now Playing with song artwork or live visualization, title, channel, seek bar, queue and native playback controls. No YouTube iframe or WebView is created.
 - Native Media3 ExoPlayer hosted in `PlaybackService`, a foreground `MediaSessionService`.
 - Playback continues when the screen locks, the activity goes into the background, or the player UI is closed. Closing the UI releases its controller, not the audio engine.
 - Media notification and lock-screen controls are provided by Media3. Audio focus, headset unplug handling, CPU/network wake locks and explicit Stop are implemented.
@@ -48,7 +59,9 @@ This is a signed debug APK for testing. It updates the earlier YouMu APKs using 
 
 ## Checks
 
-`testDebugUnitTest` covers link validation, native import/favorites/share flows, local storage, native controls and timeline, queue selection, no WebView in the player, UI background/destroy behavior, foreground media service permissions, and actual media session creation/destruction using Robolectric. Network checks are skipped by default.
+`testDebugUnitTest` covers link validation, native import/favorites/share flows, local storage, native controls and timeline, queue selection, no WebView in the player, UI background/destroy behavior, foreground media service permissions, and actual media session creation/destruction using Robolectric. New checks cover local playlist creation/deduplication/removal, theme persistence and library compatibility, native repeat/shuffle restoration, live display selection, known-frequency PCM analysis and byte-for-byte audio passthrough, DownloadManager destination/format/retry/deduplication, Android 8 storage permission gating, and completed/missing download files through a local content provider. Network checks are skipped by default.
+
+Optional native Canvas layout previews: `gradlew.bat testDebugUnitTest -PpreviewUi=true --tests '*PlayerPreviewTest'`. PNG renders use synthetic audio samples and sample metadata, and are written under `app/build/previews`; they are layout checks, not device screenshots.
 
 Opt-in live public-source checks:
 
@@ -58,10 +71,10 @@ Opt-in live public-source checks:
 
 These load a public playlist and fetch media bytes from a freshly resolved public audio stream. They do not play sound through an Android audio device.
 
-Manual device acceptance: start a playlist, lock the screen for several minutes, use notification/lock-screen controls, unlock, leave and reopen the player, test headphones unplugging, and stop playback. No physical device or emulator was connected during development; these device checks remain unverified.
+Manual device acceptance: start a playlist, lock the screen for several minutes, use notification/lock-screen controls, unlock, leave and reopen the player, test headphones unplugging, and stop playback. Change themes, select each visualization, check pause/resume, test each playback mode, create a local playlist and add/remove songs. On Android 8, deny then grant storage permission, download a song, check its file in Music/YouMu, enable airplane mode and play Downloads. No physical device or emulator was connected during development; these device checks remain unverified.
 
 ## Source and licensing
 
-See `THIRD_PARTY_NOTICES.md` and `COPYING`. NewPipeExtractor is GPL-3.0-or-later; corresponding app source/build files and the matching extractor source JAR accompany this build. YouMu is independent of Team NewPipe and YouTube. Offline downloads and real-time audio visualizations are not implemented.
+See `THIRD_PARTY_NOTICES.md` and `COPYING`. NewPipeExtractor is GPL-3.0-or-later; corresponding app source/build files and the matching extractor source JAR accompany this build. YouMu is independent of Team NewPipe and YouTube. Download availability depends on the same public-source resolver as streaming; failed or expired downloads can be retried. Downloads that are manually removed from storage are detected when used. Clearing the library retains downloaded audio files.
 
 References: [Media3 background playback](https://developer.android.com/media/media3/session/background-playback), [NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor), [Android Google authorization](https://developer.android.com/identity/authorization).

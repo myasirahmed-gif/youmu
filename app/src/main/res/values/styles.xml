@@ -8,4 +8,12 @@
         <item name="android:navigationBarColor">#0C1015</item>
         <item name="android:windowBackground">#0C1015</item>
     </style>
+    <style name="Theme.YouMu.Ocean" parent="Theme.YouMu">
+        <item name="android:colorAccent">#8DDCFF</item>
+        <item name="android:windowBackground">#091421</item>
+    </style>
+    <style name="Theme.YouMu.AmOLED" parent="Theme.YouMu">
+        <item name="android:colorAccent">#CCB1FF</item>
+        <item name="android:windowBackground">#000000</item>
+    </style>
 </resources>

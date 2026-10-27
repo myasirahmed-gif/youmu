@@ -15,7 +15,7 @@ data class QueueTrack(val id:String,val title:String,val artist:String)
 data class AudioSnapshot(
     val connected:Boolean=false,val loading:Boolean=false,val playing:Boolean=false,
     val position:Long=0,val duration:Long=0,val index:Int=-1,
-    val tracks:List<QueueTrack> = emptyList(),val message:String="",val failed:Boolean=false,val diagnostics:String=""
+    val tracks:List<QueueTrack> = emptyList(),val message:String="",val failed:Boolean=false,val diagnostics:String="",val mode:Int=0,val canNext:Boolean?=null
 ){
     val current get()=tracks.getOrNull(index)
     val progress get()=if(duration>0)((position.toDouble()/duration)*1000).toInt().coerceIn(0,1000)else 0
@@ -25,6 +25,13 @@ interface AudioControls{
     fun snapshot():AudioSnapshot
     fun command(name:String,value:Long=0)
     fun release()
+}
+object PlaybackModes {
+    fun apply(player:Player,mode:Int){
+        player.shuffleModeEnabled=mode==1
+        player.repeatMode=when(mode){2->Player.REPEAT_MODE_ALL;3->Player.REPEAT_MODE_ONE;else->Player.REPEAT_MODE_OFF}
+    }
+    fun read(player:Player)=when{player.repeatMode==Player.REPEAT_MODE_ONE->3;player.repeatMode==Player.REPEAT_MODE_ALL->2;player.shuffleModeEnabled->1;else->0}
 }
 /** Releasing a UI connection never stops the service-owned audio player. */
 class NativeAudioControls(private val activity:Activity,private val playlist:Playlist,private val autoStart:Boolean=true):AudioControls{
@@ -90,7 +97,7 @@ class NativeAudioControls(private val activity:Activity,private val playlist:Pla
         return AudioSnapshot(connected=player.isConnected,loading=PlaybackStatus.loading||requestPending||player.playbackState==Player.STATE_BUFFERING,
             playing=player.isPlaying,position=player.currentPosition.coerceAtLeast(0),duration=player.duration.takeIf{it!=C.TIME_UNSET&&it>0}?:0,
             index=player.currentMediaItemIndex,tracks=tracks,message=connectionError.ifBlank{PlaybackStatus.message.ifBlank{if(emptyFailure)"No tracks were loaded. Tap Retry." else if(requestPending)"Starting audio player…" else ""}},
-            failed=PlaybackStatus.failed||connectionError.isNotBlank()||emptyFailure,diagnostics=PlaybackStatus.diagnostics)
+            failed=PlaybackStatus.failed||connectionError.isNotBlank()||emptyFailure,diagnostics=PlaybackStatus.diagnostics,mode=PlaybackModes.read(player),canNext=player.hasNextMediaItem())
     }
     override fun command(name:String,value:Long){
         if(name=="retry"){
@@ -100,6 +107,7 @@ class NativeAudioControls(private val activity:Activity,private val playlist:Pla
         }
         val player=controller?:return
         when(name){
+            "mode"->{val mode=value.toInt().coerceIn(0,3);PlaybackModes.apply(player,mode);PlayerPreferences(activity).mode=mode;callback?.invoke(snapshot())}
             "play"->{if(player.playerError!=null||player.playbackState==Player.STATE_IDLE)player.prepare();player.play()}
             "pause"->player.pause()
             "next"->if(player.hasNextMediaItem()){player.seekToNextMediaItem();if(player.playerError!=null||player.playbackState==Player.STATE_IDLE)player.prepare();player.play()}

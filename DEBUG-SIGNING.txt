@@ -1,7 +1,7 @@
 YouMu Android debug build
 
 Package name: com.youmu.app
-Version: 0.3.1 (4)
+Version: 0.4.0 (5)
 Minimum Android: 8.0 (API 26)
 
 Signing certificate SHA-1:

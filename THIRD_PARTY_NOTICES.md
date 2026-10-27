@@ -1,6 +1,6 @@
 # Third-party components
 
-YouMu 0.3.1 integrates NewPipeExtractor v0.26.5, copyright its respective contributors, licensed GPL-3.0-or-later. This combined build is distributed under GPL-3.0-or-later. Preserve upstream copyright notices and provide corresponding source when redistributing it. The license text is in COPYING and bundled in the APK under assets/licenses. The app source and build scripts are provided alongside the APK; the extractor's matching source JAR is in third-party/.
+YouMu 0.4.0 integrates NewPipeExtractor v0.26.5, copyright its respective contributors, licensed GPL-3.0-or-later. This combined build is distributed under GPL-3.0-or-later. Preserve upstream copyright notices and provide corresponding source when redistributing it. The license text is in COPYING and bundled in the APK under assets/licenses. The app source and build scripts are provided alongside the APK; the extractor's matching source JAR is in third-party/.
 
 YouMu is not affiliated with or endorsed by Team NewPipe or YouTube.
 

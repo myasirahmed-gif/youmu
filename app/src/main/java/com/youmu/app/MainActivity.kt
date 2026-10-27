@@ -25,11 +25,11 @@ import com.google.android.gms.common.api.Scope
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
-    private val bg = Ui.background
-    private val panel = Ui.surface
-    private val lime = Ui.accent
-    private val ink = Ui.white
-    private val muted = Ui.muted
+    private val bg get()=Ui.background
+    private val panel get()=Ui.surface
+    private val lime get()=Ui.accent
+    private val ink get()=Ui.white
+    private val muted get()=Ui.muted
     private val youtubeScope = "https://www.googleapis.com/auth/youtube.readonly"
     private lateinit var store: PlaylistStore
     private var playlists = mutableListOf<Playlist>()
@@ -46,9 +46,17 @@ class MainActivity : Activity() {
     private var search = ""
     private var playerScreen: PlayerScreen? = null
     private var nowPlaying: Playlist? = null
+    private var pendingDownload:QueueTrack?=null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(when(PlayerPreferences(this).theme){1->R.style.Theme_YouMu_Ocean;2->R.style.Theme_YouMu_AmOLED;else->R.style.Theme_YouMu})
         super.onCreate(savedInstanceState)
+        Ui.apply(this)
+        @Suppress("DEPRECATION")
+        window.statusBarColor=bg
+        @Suppress("DEPRECATION")
+        window.navigationBarColor=bg
+        savedInstanceState?.getString("downloadId")?.let{id->pendingDownload=QueueTrack(id,savedInstanceState.getString("downloadTitle").orEmpty(),savedInstanceState.getString("downloadArtist").orEmpty())}
         store = PlaylistStore(this)
         playlists = store.load()
         view = savedInstanceState?.getString("view") ?: "Library"
@@ -66,8 +74,8 @@ class MainActivity : Activity() {
     }
 
     override fun onNewIntent(intent:Intent){super.onNewIntent(intent);setIntent(intent);if(intent.getBooleanExtra(PlaybackService.EXTRA_RESUME,false))openCurrentPlayer()}
-    private fun openCurrentPlayer(){val id=PlaybackStatus.playlistId;playlists.find{it.id==id}?.let{play(it,autoStart=false)}}
-    override fun onSaveInstanceState(outState: Bundle) { outState.putString("playerPlaylist",nowPlaying?.id); outState.putString("view",view); outState.putString("search",search); super.onSaveInstanceState(outState) }
+    private fun openCurrentPlayer(){val id=PlaybackStatus.playlistId;val p=store.load().find{it.id==id}?:if(id=="youmu_downloads")Playlist(id,"Downloads")else null;p?.let{play(it,autoStart=false)}}
+    override fun onSaveInstanceState(outState: Bundle) { pendingDownload?.let{outState.putString("downloadId",it.id);outState.putString("downloadTitle",it.title);outState.putString("downloadArtist",it.artist)};outState.putString("playerPlaylist",nowPlaying?.id); outState.putString("view",view); outState.putString("search",search); super.onSaveInstanceState(outState) }
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun shape(color: Int, radius: Int = 16, stroke: Int? = null) = GradientDrawable().apply { setColor(color); cornerRadius=dp(radius).toFloat(); if(stroke!=null)setStroke(dp(1),stroke) }
     private fun text(value: String, size: Float=14f, color: Int=ink, bold: Boolean=false) = TextView(this).apply { text=value; textSize=size; setTextColor(color); if(bold)typeface=Typeface.create("sans-serif-medium",Typeface.NORMAL); includeFontPadding=false }
@@ -91,6 +99,8 @@ class MainActivity : Activity() {
     }
     private fun showLibrary() {
         destroyPlayer()
+        playlists=store.load()
+        playlists.filter{LocalMusic.isLocal(it.id)}.forEach{it.count=LocalMusic(this).tracks(it.id).size}
         val scroll=ScrollView(this).apply { isFillViewport=true;clipToPadding=false }
         val body=column(22);scroll.addView(body)
         val top=row()
@@ -98,13 +108,17 @@ class MainActivity : Activity() {
         top.addView(brand,LinearLayout.LayoutParams(0,-2,1f))
         top.addView(SymbolButton(this,"settings","Settings").apply {setOnClickListener{showSettings()}},LinearLayout.LayoutParams(dp(46),dp(46)))
         body.addView(top);space(body,25)
-        val hero=column(23).apply {background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(Color.rgb(38,53,42),Color.rgb(23,35,37))).apply {cornerRadius=dp(22).toFloat();setStroke(dp(1),Color.rgb(59,78,58))}}
-        label(hero,"CURATED BY YOU");space(hero,15)
-        hero.addView(text("Your collection.\nA better listening space.",27f,ink,true));space(hero,12)
-        hero.addView(text("Bring your favorite YouTube playlists together.",13f,Color.rgb(172,190,175)).apply { setLineSpacing(dp(4).toFloat(),1f) });space(hero,22)
-        hero.addView(button("＋  Import playlist",true){showImport()});body.addView(hero);space(body,20)
+        val hero=column(20).apply {background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(blend(lime,panel,.15f),panel)).apply {cornerRadius=dp(24).toFloat();setStroke(dp(1),Ui.border)}}
+        label(hero,"YOUR DAILY SOUNDTRACK");space(hero,12)
+        hero.addView(text("Find your rhythm.",27f,ink,true));space(hero,8)
+        hero.addView(text("Your playlists. Your way to listen.",12f,muted));space(hero,17)
+        hero.addView(button("＋  Import playlist",true){showImport()});body.addView(hero);space(body,12)
         connectionButton=button(if(accessToken==null)"G   Connect YouTube" else "✓  YouTube connected · Sync") { connectYouTube() }
-        body.addView(connectionButton,LinearLayout.LayoutParams(-1,dp(50)));space(body,28)
+        body.addView(connectionButton,LinearLayout.LayoutParams(-1,dp(46)));space(body,12)
+        val shortcuts=row()
+        shortcuts.addView(button("＋ New playlist"){LocalMusic.create(this){showLibrary()}},LinearLayout.LayoutParams(0,dp(50),1f).apply{rightMargin=dp(6)})
+        shortcuts.addView(button("↓ Downloads"){showDownloads()},LinearLayout.LayoutParams(0,dp(50),1f).apply{leftMargin=dp(6)})
+        body.addView(shortcuts);space(body,24)
         val heading=row();libraryTitle=text("",23f,ink,true);heading.addView(libraryTitle,LinearLayout.LayoutParams(0,-2,1f));heading.addView(text("ON THIS DEVICE",8f,muted));body.addView(heading);space(body,16)
         val searchField=field("Search your playlists",search);searchField.contentDescription="Search playlists";body.addView(searchField)
         searchField.addTextChangedListener(object:TextWatcher { override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}; override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){search=s.toString();renderCards()};override fun afterTextChanged(s:Editable?){} })
@@ -138,7 +152,7 @@ class MainActivity : Activity() {
             val card=column(17).apply { background=shape(panel,18,Ui.border) }
             val top=row();val record=RecordArt(this).apply { contentDescription="Play ${p.title}";isClickable=true;isFocusable=true;setOnClickListener{play(p)} };top.addView(record,LinearLayout.LayoutParams(dp(74),dp(74)))
             val details=column().apply { setPadding(dp(15),0,dp(5),0) };details.addView(text(p.title,17f,ink,true).apply { maxLines=2 });space(details,7)
-            details.addView(text((if(p.count>=0)"${p.count} videos · " else "")+if(p.fromAccount)"YouTube account" else "YouTube playlist",11f,muted))
+            details.addView(text((if(p.count>=0)"${p.count} tracks · " else "")+if(LocalMusic.isLocal(p.id))"Local playlist" else if(p.fromAccount)"YouTube account" else "YouTube playlist",11f,muted))
             top.addView(details,LinearLayout.LayoutParams(0,-2,1f));card.addView(top);space(card,16)
             val actions=row();actions.addView(button("▶  Play",true){play(p)},LinearLayout.LayoutParams(0,dp(46),1f))
             actions.addView(SymbolButton(this,if(p.favorite)"heart-filled" else "heart",if(p.favorite)"Unfavorite ${p.title}" else "Favorite ${p.title}").apply {setOnClickListener{p.favorite=!p.favorite;store.save(playlists);renderCards()}},LinearLayout.LayoutParams(dp(48),dp(48)).apply { leftMargin=dp(10) })
@@ -221,27 +235,81 @@ class MainActivity : Activity() {
         network("Refreshing playlist…",{api.playlist(p.id,token)}){updated->if(!keepTitle)p.title=updated.title;p.count=updated.count;store.save(playlists);renderCards();toast("Playlist updated.")}
     }
     private fun playlistMenu(p:Playlist) {
+        if(LocalMusic.isLocal(p.id)){localMenu(p);return}
         AlertDialog.Builder(this).setTitle(p.title).setItems(arrayOf("Refresh playlist details","Open in YouTube","Remove from library")){_,which->when(which){0->refresh(p);1->openExternal("https://www.youtube.com/playlist?list=${p.id}");2->AlertDialog.Builder(this).setTitle("Remove playlist?").setMessage("This removes it from YouMu on this device.").setNegativeButton("Cancel",null).setPositiveButton("Remove"){_,_->playlists.remove(p);store.save(playlists);renderCards()}.show()}}.show()
     }
     private fun play(p:Playlist,autoStart:Boolean=true) {
+        if(autoStart&&p.id.startsWith("local_")&&LocalMusic(this).tracks(p.id).isEmpty()){
+            showMessage("Your playlist is ready","Play a song from a YouTube playlist, then tap Add to playlist on Now Playing to save it here.");return
+        }
         destroyPlayer()
         nowPlaying=p
         p.lastPlayed=System.currentTimeMillis()
         store.save(playlists)
         val screen=PlayerScreen(this,p,
             onBack={showLibrary()},
-            onFavorite={p.favorite=!p.favorite;store.save(playlists)},
+            onFavorite={val all=store.load();p.favorite=!p.favorite;all.find{it.id==p.id}?.favorite=p.favorite;store.save(all)},
             openExternal={openExternal(it)},autoStart=autoStart)
         playerScreen=screen
         mount(screen.view)
     }
     private fun showSettings() {
-        val options=arrayOf("About & privacy","Disconnect YouTube","Clear local library")
+        val options=arrayOf("Theme · ${PlayerPreferences.themes[PlayerPreferences(this).theme]}","Artwork & audio visualizations","Downloads","About & privacy","Disconnect YouTube","Clear local library")
         AlertDialog.Builder(this).setTitle("YouMu settings").setItems(options){_,which->when(which){
-            0->AlertDialog.Builder(this).setTitle("Your music. Your data.").setMessage("YouMu stores playlists, favorites and recent plays on this device. Google authorization requests read-only YouTube access. Access tokens stay in memory.\n\nYouTube playback contacts Google and follows YouTube’s terms. Audio playback continues with your screen off. Offline downloads are not included.\n\nVersion 0.3.1 · Android").setPositiveButton("Done",null).setNeutralButton("Google privacy"){_,_->openExternal("https://policies.google.com/privacy")}.setNegativeButton("YouTube terms"){_,_->openExternal("https://www.youtube.com/t/terms")}.show()
-            1->disconnect()
-            2->AlertDialog.Builder(this).setTitle("Clear your library?").setMessage("All local playlists, favorites and recent plays will be removed.").setNegativeButton("Cancel",null).setPositiveButton("Clear"){_,_->authGeneration++;operation++;stopActivePlayback();accessToken=null;AccountSession.token=null;playlists.clear();store.save(playlists);showLibrary()}.show()
+            0->AlertDialog.Builder(this).setTitle("Choose your theme").setSingleChoiceItems(PlayerPreferences.themes,PlayerPreferences(this).theme){dialog,index->PlayerPreferences(this).theme=index;dialog.dismiss();Ui.apply(this);recreate()}.setNegativeButton("Close",null).show()
+            1->PlayerPreferences.chooseVisual(this)
+            2->showDownloads()
+            3->AlertDialog.Builder(this).setTitle("Your music. Your data.").setMessage("Playlists and preferences stay on this device. Google requests read-only YouTube access; access tokens stay in memory.\n\nDownloads save original audio files in Music/YouMu and can play offline. Spectrum and Orbit Wave react to decoded music, without microphone access.\n\nVersion 0.4.0 · Android").setPositiveButton("Done",null).setNeutralButton("Google privacy"){_,_->openExternal("https://policies.google.com/privacy")}.setNegativeButton("YouTube terms"){_,_->openExternal("https://www.youtube.com/t/terms")}.show()
+            4->disconnect()
+            5->AlertDialog.Builder(this).setTitle("Clear your library?").setMessage("All local playlists, favorites and recent plays will be removed. Downloaded audio files remain in Music/YouMu.").setNegativeButton("Cancel",null).setPositiveButton("Clear"){_,_->authGeneration++;operation++;stopActivePlayback();accessToken=null;AccountSession.token=null;playlists.forEach{LocalMusic(this).delete(it.id)};playlists.clear();store.save(playlists);showLibrary()}.show()
         }}.show()
+    }
+    private fun blend(a:Int,b:Int,f:Float)=Color.rgb((Color.red(a)*f+Color.red(b)*(1-f)).toInt(),(Color.green(a)*f+Color.green(b)*(1-f)).toInt(),(Color.blue(a)*f+Color.blue(b)*(1-f)).toInt())
+    private fun localMenu(p:Playlist){
+        AlertDialog.Builder(this).setTitle(p.title).setItems(arrayOf("View songs","Rename playlist","Delete playlist")){_,index->when(index){
+            0->showLocalSongs(p)
+            1->{val input=field("Playlist name",p.title);val dialog=AlertDialog.Builder(this).setTitle("Rename playlist").setView(input).setNegativeButton("Cancel",null).setPositiveButton("Save",null).create();dialog.setOnShowListener{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{val name=input.text.toString().trim();if(name.isBlank())input.error="Enter a name" else{p.title=name.take(100);store.save(playlists);dialog.dismiss();showLibrary()}}};dialog.show()}
+            2->AlertDialog.Builder(this).setTitle("Delete ${p.title}?").setMessage("Downloaded song files will stay on your phone.").setNegativeButton("Cancel",null).setPositiveButton("Delete"){_,_->if(PlaybackStatus.playlistId==p.id)stopActivePlayback();LocalMusic(this).delete(p.id);playlists.removeAll{it.id==p.id};store.save(playlists);showLibrary()}.show()
+        }}.show()
+    }
+    private fun showLocalSongs(p:Playlist){
+        val music=LocalMusic(this);val tracks=music.tracks(p.id)
+        if(tracks.isEmpty()){showMessage(p.title,"This playlist is empty. Use Add to playlist on Now Playing to save songs here.");return}
+        AlertDialog.Builder(this).setTitle("${p.title} · ${tracks.size} songs").setItems(tracks.map{"${it.title}\n${it.artist}"}.toTypedArray()){_,index->
+            AlertDialog.Builder(this).setTitle(tracks[index].title).setItems(arrayOf("Download song","Remove from playlist")){_,action->
+                if(action==0)download(tracks[index])else{music.remove(p.id,tracks[index].id);p.count=music.tracks(p.id).size;store.save(playlists);showLibrary();showLocalSongs(p)}
+            }.setNegativeButton("Close",null).show()
+        }.setPositiveButton("Play playlist"){_,_->play(p)}.setNegativeButton("Close",null).show()
+    }
+    internal fun download(track:QueueTrack){
+        if(MusicDownloads.needsPermission(this)){
+            pendingDownload=track
+            requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE),2002)
+        }else MusicDownloads.start(this,track)
+    }
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+        if(requestCode==2002){val track=pendingDownload;pendingDownload=null;if(track!=null){if(grantResults.firstOrNull()==android.content.pm.PackageManager.PERMISSION_GRANTED)MusicDownloads.start(this,track)else toast("Storage permission is needed to save songs in Music/YouMu.")}}
+    }
+    private fun showDownloads(){
+        val downloads=MusicDownloads(this);val items=downloads.entries()
+        if(items.isEmpty()){showMessage("Downloads","Tap Download on Now Playing to save a song in Music/YouMu. Completed downloads can play offline.");return}
+        val labels=items.map {item->val state=downloads.state(item);val detail=when(state?.status){
+            android.app.DownloadManager.STATUS_SUCCESSFUL->if(downloads.localUri(item.track.id)!=null)"Saved · Ready offline" else "File removed · Tap to retry"
+            android.app.DownloadManager.STATUS_RUNNING->if(state.total>0)"Downloading · ${state.bytes*100/state.total}%" else "Downloading…"
+            android.app.DownloadManager.STATUS_PENDING->"Waiting to download"
+            android.app.DownloadManager.STATUS_PAUSED->"Waiting for network or storage"
+            else->"Download failed · Tap to retry"
+        };"${item.track.title}\n$detail"}.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Downloads · ${items.size}").setItems(labels){_,index->
+            val item=items[index];val ready=downloads.localUri(item.track.id)!=null
+            AlertDialog.Builder(this).setTitle(item.track.title).setItems(arrayOf(if(ready)"Play offline collection" else "Retry download","Add to playlist","Delete download")){_,action->when(action){
+                0->if(ready)play(Playlist("youmu_downloads","Downloads"))else download(item.track)
+                1->LocalMusic.addToPlaylist(this,item.track)
+                2->AlertDialog.Builder(this).setTitle("Delete downloaded file?").setMessage(item.track.title).setNegativeButton("Cancel",null).setPositiveButton("Delete"){_,_->if(PlaybackStatus.playlistId=="youmu_downloads")stopActivePlayback();downloads.remove(item);showDownloads()}.show()
+            }}.setNegativeButton("Close",null).show()
+        }.setPositiveButton("Play all"){_,_->if(items.any{downloads.localUri(it.track.id)!=null})play(Playlist("youmu_downloads","Downloads"))else toast("Wait for a download to finish first.")}
+            .setNeutralButton("Refresh"){_,_->showDownloads()}.setNegativeButton("Close",null).show()
     }
     private fun stopActivePlayback(){if(PlaybackStatus.playlistId.isNotBlank()){PlaybackStatus.clear();startService(Intent(this,PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP))}}
     private fun disconnect() {
@@ -267,9 +335,9 @@ class MainActivity : Activity() {
 class RecordArt(context:android.content.Context):View(context){
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
     override fun onDraw(canvas:Canvas){super.onDraw(canvas);val cx=width/2f;val cy=height/2f;val radius=minOf(width,height)*.48f
-        paint.color=Color.rgb(49,63,39);canvas.drawCircle(cx,cy,radius,paint)
+        paint.color=Ui.surface;canvas.drawCircle(cx,cy,radius,paint)
         paint.style=Paint.Style.STROKE;paint.strokeWidth=1.2f
-        for(i in 0..6){paint.color=Color.rgb(69,83,55);canvas.drawCircle(cx,cy,radius*(.45f+i*.075f),paint)}
-        paint.style=Paint.Style.FILL;paint.color=Color.rgb(215,244,122);canvas.drawCircle(cx,cy,radius*.37f,paint);paint.color=Color.rgb(28,34,22);canvas.drawCircle(cx,cy,radius*.07f,paint)
+        for(i in 0..6){paint.color=Ui.border;canvas.drawCircle(cx,cy,radius*(.45f+i*.075f),paint)}
+        paint.style=Paint.Style.FILL;paint.color=Ui.accent;canvas.drawCircle(cx,cy,radius*.37f,paint);paint.color=Ui.background;canvas.drawCircle(cx,cy,radius*.07f,paint)
     }
 }

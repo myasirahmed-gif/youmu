@@ -16,6 +16,11 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.TeeAudioProcessor
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -40,7 +45,12 @@ class PlaybackService:MediaSessionService(){
     private var streamTimeout:Runnable?=null
     internal var queueLoader:(String,Boolean,(AudioPlaylist)->Unit)->AudioPlaylist={id,fromAccount,publish->
         val token=AccountSession.token
-        if(fromAccount&&token!=null)YouTubeApi().tracks(id,token,publish)else AudioRepository.playlist(id,publish)
+        when {
+            id=="youmu_downloads"->MusicDownloads(this).audioPlaylist()
+            LocalMusic.isLocal(id)->LocalMusic(this).audioPlaylist(id)
+            fromAccount&&token!=null->YouTubeApi().tracks(id,token,publish)
+            else->AudioRepository.playlist(id,publish)
+        }
     }
     private fun cancelTimeouts(){playlistTimeout?.let(main::removeCallbacks);streamTimeout?.let(main::removeCallbacks);playlistTimeout=null;streamTimeout=null}
     internal fun reportFailure(error:Throwable,phase:String){
@@ -53,19 +63,28 @@ class PlaybackService:MediaSessionService(){
     override fun onCreate(){
         super.onCreate()
         val http=DefaultHttpDataSource.Factory().setUserAgent(AudioRepository.USER_AGENT).setConnectTimeoutMs(15_000).setReadTimeoutMs(20_000)
-        val source=ResolvingDataSource.Factory(http){spec->
+        val source=ResolvingDataSource.Factory(DefaultDataSource.Factory(this,http)){spec->
             if(spec.uri.scheme!="youmu")spec else {
                 val id=spec.uri.lastPathSegment.orEmpty()
-                spec.withUri(Uri.parse(AudioRepository.resolve(id).url))
+                spec.withUri(MusicDownloads(this).localUri(id)?:Uri.parse(AudioRepository.resolve(id).url))
             }
         }
-        player=ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(source))
+        val renderers=object:DefaultRenderersFactory(this){
+            override fun buildAudioSink(context:android.content.Context,enableFloatOutput:Boolean,enableAudioTrackPlaybackParams:Boolean):AudioSink =
+                DefaultAudioSink.Builder(context).setEnableFloatOutput(false)
+                    .setAudioProcessors(arrayOf(TeeAudioProcessor(MusicSampleSink()))).build()
+        }
+        player=ExoPlayer.Builder(this,renderers).setMediaSourceFactory(DefaultMediaSourceFactory(source))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).build()
+        PlaybackModes.apply(player,PlayerPreferences(this).mode)
         val activity=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java).putExtra(EXTRA_RESUME,true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         session=MediaSession.Builder(this,player).setSessionActivity(activity).build()
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).setNotificationId(NOTIFICATION_ID).setChannelId(CHANNEL).build())
         player.addListener(object:Player.Listener{
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled:Boolean){saveMode()}
+            override fun onRepeatModeChanged(repeatMode:Int){saveMode()}
+            private fun saveMode(){PlayerPreferences(this@PlaybackService).mode=PlaybackModes.read(player)}
             override fun onIsPlayingChanged(isPlaying:Boolean){PlaybackStatus.playing=isPlaying}
             override fun onPlaybackStateChanged(state:Int){
                 streamTimeout?.let(main::removeCallbacks);streamTimeout=null
@@ -160,7 +179,7 @@ class PlaybackService:MediaSessionService(){
         }else player.addMediaItems(items)
     }
     private fun stopPlayback(){cancelTimeouts();generation++;load?.cancel(true);player.stop();player.clearMediaItems();PlaybackStatus.clear();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf()}
-    override fun onDestroy(){disposed=true;generation++;load?.cancel(true);worker.shutdownNow();main.removeCallbacksAndMessages(null);session?.release();session=null;if(::player.isInitialized)player.release();if(!PlaybackStatus.failed)PlaybackStatus.clear();super.onDestroy()}
+    override fun onDestroy(){disposed=true;AudioVisuals.clear();generation++;load?.cancel(true);worker.shutdownNow();main.removeCallbacksAndMessages(null);session?.release();session=null;if(::player.isInitialized)player.release();if(!PlaybackStatus.failed)PlaybackStatus.clear();super.onDestroy()}
     companion object{
         const val ACTION_LOAD="com.youmu.app.LOAD_PLAYLIST"
         const val ACTION_STOP="com.youmu.app.STOP_PLAYBACK"
